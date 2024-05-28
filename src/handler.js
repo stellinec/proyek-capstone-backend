@@ -341,9 +341,9 @@ const tambahArtikelHandler = (request, h) => {
 };
 
 const getArtikelByIdHandler = (request, h) => {
-  const { artikelid } = request.params;
+  const { artikelId } = request.params;
 
-  const artikel = listArtikel.find((i) => i.id === artikelid);
+  const artikel = listArtikel.find((i) => i.id === artikelId);
   if (artikel !== undefined) {
     return {
       status: "success",
@@ -394,9 +394,9 @@ const editArtikelByIdHandler = (request, h) => {
 };
 
 const deleteArtikelByIdHandler = (request, h) => {
-  const { artikelIdid } = request.params;
+  const { artikelId } = request.params;
 
-  const index = listArtikel.findIndex((i) => i.id === artikelIdid);
+  const index = listArtikel.findIndex((i) => i.id === artikelId);
 
   if (index !== -1) {
     listArtikel.splice(index, 1);
