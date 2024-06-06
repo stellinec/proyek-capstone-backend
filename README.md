@@ -36,6 +36,13 @@ path: '/user/{userId}',
 # Login
 method: 'POST',
 path: '/login',
+body to test in postman : 
+```
+{
+"username" : "Budi", 
+"password" : "password",
+}
+```
 
 # Penjemputan  (client -> CRUD, mitra -> U)
 ## CREATE 
