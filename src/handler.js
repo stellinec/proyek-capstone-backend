@@ -171,7 +171,7 @@ const loginHandler = async (request, h) => {
   }
 
   const token = jwt.sign(
-    { userId: user.id, username: user.username },
+    { userId: user.id, username: user.username, type: user.type },
     JWT_SECRET,
     { expiresIn: "1h" }
   );
@@ -213,23 +213,22 @@ const verifyToken = (request, h) => {
 };
 
 const tambahPesananHandler = (request, h) => {
-  const { userId, alamat, berat, harga } = request.payload;
+  const { alamat } = request.payload;
   const id = nanoid(16);
   const createdAt = new Date().toISOString();
-  const newPesanan = { userId, alamat, berat, harga, id, createdAt };
+  const newPesanan = { userId: request.user.userId, alamat, id, createdAt };
 
-  const user = listUser.find(
-    (user) => user.id === userId && user.type === "client"
-  );
-  if (!user) {
+  const isClient = request.user.type === 'client'; // Check if user is admin
+
+  if (!isClient) {
     const response = h.response({
       status: "fail",
-      message: 'Pesanan hanya dapat dibuat oleh pengguna dengan tipe "client"',
+      message: "Hanya client yang dapat membuat pesanan ",
     });
-    response.code(400);
+    response.code(403);
     return response;
   }
-
+  const user = listUser.find(user => user.id === request.user.userId);
   listPesanan.push(newPesanan);
   user.pesanan.push(newPesanan);
 
@@ -276,6 +275,78 @@ const getPesananByIdHandler = (request, h) => {
   return response;
 };
 
+const editPesananByIdHandler = (request, h) => {
+  const { id } = request.params;
+  const { berat, harga, alamat } = request.payload;
+  const updatedAt = new Date().toISOString();
+  const userRole = request.user.type; // Get the user's role
+
+  if (userRole === 'client') {
+    // If the user is a client, they can only update alamat
+    if (alamat !== undefined) {
+      const index = listPesanan.findIndex((i) => i.id === id);
+      if (index !== -1) {
+        listPesanan[index] = {
+          ...listPesanan[index],
+          alamat,
+          updatedAt,
+        };
+        const response = h.response({
+          status: "success",
+          message: "Alamat pesanan berhasil diperbarui",
+        });
+        response.code(200);
+        return response;
+      }
+    } else {
+      // If client tries to update berat or harga
+      const response = h.response({
+        status: "fail",
+        message: "Hanya mitra yang dapat menginputkan berat dan harga",
+      });
+      response.code(403);
+      return response;
+    }
+  } else if (userRole === 'mitra') {
+    // If the user is a mitra, they can only update berat and harga
+    if (berat !== undefined || harga !== undefined) {
+      const index = listPesanan.findIndex((i) => i.id === id);
+      if (index !== -1) {
+        listPesanan[index] = {
+          ...listPesanan[index],
+          berat,
+          harga,
+          updatedAt,
+        };
+        const response = h.response({
+          status: "success",
+          message: "Berat dan harga berhasil ditambahkan",
+        });
+        response.code(200);
+        return response;
+      }
+    } else {
+      // If mitra tries to update alamat
+      const response = h.response({
+        status: "fail",
+        message: "Hanya client yang dapat memperbarui alamat",
+      });
+      response.code(403);
+      return response;
+    }
+  } else {
+    // If user's role is neither client nor mitra
+    const response = h.response({
+      status: "fail",
+      message: "User tidak diizinkan untuk melakukan aksi ini",
+    });
+    response.code(403);
+    return response;
+  }
+};
+
+
+
 const deletePesananByIdHandler = (request, h) => {
   const { id } = request.params;
 
@@ -312,11 +383,23 @@ const deletePesananByIdHandler = (request, h) => {
   return response;
 };
 
+
 const tambahArtikelHandler = (request, h) => {
   const { judul, isi, penulis } = request.payload;
   const id = nanoid(16);
   const createdAt = new Date().toISOString();
   const updatedAt = createdAt;
+  console.log('User type:', request.user);
+  const isAdmin = request.user.type === 'admin'; // Check if user is admin
+
+  if (!isAdmin) {
+    const response = h.response({
+      status: "fail",
+      message: "Hanya Admin yang dapat membuat artikel",
+    });
+    response.code(403);
+    return response;
+  }
   const newArtikel = { judul, isi, penulis, id, createdAt, updatedAt };
   listArtikel.push(newArtikel);
   const isSuccess = listArtikel.filter((i) => i.id === id).length > 0;
@@ -365,7 +448,16 @@ const editArtikelByIdHandler = (request, h) => {
 
   const { judul, isi, penulis } = request.payload;
   const updatedAt = new Date().toISOString();
+  const isAdmin = request.user.type === 'admin'; // Check if user is admin
 
+  if (!isAdmin) {
+    const response = h.response({
+      status: "fail",
+      message: "Hanya Admin yang dapat memperbarui artikel",
+    });
+    response.code(403);
+    return response;
+  }
   const index = listArtikel.findIndex((i) => i.id === artikelId);
 
   if (index !== -1) {
@@ -395,7 +487,16 @@ const editArtikelByIdHandler = (request, h) => {
 
 const deleteArtikelByIdHandler = (request, h) => {
   const { artikelId } = request.params;
+  const isAdmin = request.user.type === 'admin'; // Check if user is admin
 
+  if (!isAdmin) {
+    const response = h.response({
+      status: "fail",
+      message: "Hanya Admin yang dapat menghapus artikel",
+    });
+    response.code(403);
+    return response;
+  }
   const index = listArtikel.findIndex((i) => i.id === artikelId);
 
   if (index !== -1) {
@@ -417,7 +518,7 @@ const deleteArtikelByIdHandler = (request, h) => {
 };
 
 const getSemuaPesananByUserHandler = (request, h) => {
-  const { userId } = request.params;
+  const { userId } = request.user;
 
   const userPesanan = listPesanan.filter(
     (pesanan) => pesanan.userId === userId
@@ -445,6 +546,34 @@ const getSemuaUserHandler = () => ({
     listUser,
   },
 });
+const getSemuaArtikelHandler = () => ({
+  status: "success",
+  data: {
+    listArtikel,
+  },
+});
+const getUserInfoHandler = (request, h) => {
+  const { userId } = request.user;
+  const userInfo = listUser.find((user) => user.id === userId);
+  if (userInfo) {
+    return {
+      status: "success",
+      data: {
+        userId,
+        userInfo,
+      },
+    };
+  }
+  const response = h.response({
+    status: "fail",
+    message: "User information not found",
+  });
+  response.code(404);
+  return response;
+};
+
+
+
 
 module.exports = {
   getSemuaUserHandler,
@@ -454,12 +583,14 @@ module.exports = {
   deleteAccountHandler,
   updateAccountHandler,
   tambahPesananHandler,
+  editPesananByIdHandler,
   deletePesananByIdHandler,
   tambahArtikelHandler,
   getArtikelByIdHandler,
   editArtikelByIdHandler,
   deleteArtikelByIdHandler,
   getSemuaPesananByUserHandler,
+  getSemuaArtikelHandler,
   getPesananByIdHandler,
-  verifyToken, // Export the new handler
+  verifyToken,getUserInfoHandler
 };

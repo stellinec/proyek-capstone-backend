@@ -37,7 +37,7 @@ path: '/user/{userId}',
 method: 'POST',
 path: '/login',
 
-# Penjemputan (CRD)
+# Penjemputan  (client -> CRUD, mitra -> U)
 ## CREATE 
 method: 'POST',
 path: '/pesanan',
@@ -45,9 +45,6 @@ body to test in postman :
 ```
 {
     "alamat" : "jln HALO", 
-   "berat": 50.1,
-   "harga": 700000,
-   "userId" : "iFh6h_rOGI5HlHRs"
 }
 ```
      
@@ -55,11 +52,32 @@ body to test in postman :
 method: 'GET',
 path: '/pesanan/{id}',
 
+## UPDATE (client)
+method: 'PUT'
+path: '/pesanan/{id}',
+body to test in postman : 
+```
+{
+    "alamat" : "jln HALO", 
+}
+```
+
+## UPDATE (mitra)
+method: 'PUT'
+path: '/pesanan/{id}',
+body to test in postman : 
+```
+{
+    "berat" : 20, 
+    "harga" : 2000
+}
+```
+
 ## DELETE
 method: 'DELETE',
 path: '/pesanan/{id}',
 
-# Artikel (admin -> CRUD, user -> R)
+# Artikel (admin -> CRUD, client -> R)
 ## CREATE
 method: 'POST',
 path: '/artikel',
@@ -100,7 +118,14 @@ path: '/users',
 
 ## Retrieve user pesanan histories
 method: 'GET',
-path: '/{userId}/pesanan/history',
+path: '/pesanan/history',
     
+## Retrieve userId, user info that currently login
+method: 'GET',
+path: '/user',
+
+## Retrieve all artikel
+method: 'GET',
+path: '/artikels',
    
 

@@ -6,14 +6,17 @@ const {
   deleteAccountHandler,
   updateAccountHandler,
   tambahPesananHandler,
+  editPesananByIdHandler,
   deletePesananByIdHandler,
   tambahArtikelHandler,
   getArtikelByIdHandler,
   editArtikelByIdHandler,
   deleteArtikelByIdHandler,
   getSemuaPesananByUserHandler,
+  getSemuaArtikelHandler,
   getPesananByIdHandler,
-  verifyToken, 
+  verifyToken, getUserInfoHandler
+  
   } = require('./handler');
   const routes = [
     {
@@ -67,6 +70,14 @@ const {
       },
     },
     {
+      method: 'PUT',
+      path: '/pesanan/{id}',
+      handler: editPesananByIdHandler,
+      options: {
+        pre: [verifyToken],
+      },
+    },
+    {
       method: 'DELETE',
       path: '/pesanan/{id}',
       handler: deletePesananByIdHandler,
@@ -112,18 +123,31 @@ const {
       method: 'GET',
       path: '/users',
       handler: getSemuaUserHandler,
+    
+    },
+    {
+      method: 'GET',
+      path: '/artikels',
+      handler: getSemuaArtikelHandler,
+      
+    },
+    {
+      method: 'GET',
+      path: '/pesanan/history',
+      handler: getSemuaPesananByUserHandler,
       options: {
         pre: [verifyToken],
       },
     },
     {
       method: 'GET',
-      path: '/{userId}/pesanan/history',
-      handler: getSemuaPesananByUserHandler,
+      path: '/user',
+      handler: getUserInfoHandler,
       options: {
         pre: [verifyToken],
       },
     },
+    
   ];
   
    
