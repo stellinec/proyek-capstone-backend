@@ -4,7 +4,7 @@ const listUser = require("../services/listUser");
 const listArtikel = require("../services/listArtikel");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { storeDataUser, storeRequest } = require('../services/storeData');
+const { db, storeDataUser, storeRequest, storeArtikel } = require('../services/storeData');
 
 // Secret key for JWT
 const JWT_SECRET = "capstone"; // Replace with a strong secret key
@@ -13,9 +13,11 @@ const registerHandler = async (request, h) => {
   const { username, password, email, nomorTelepon, type } = request.payload;
   const id = nanoid(16);
 
+  const userRef = db.collection('user').doc(id);
+
   // Check if the email already exists
-  const isEmailExist = listUser.some((user) => user.email === email);
-  if (isEmailExist) {
+  const querySnapshot = await db.collection('user').where('email', '==', email).get();
+  if (!querySnapshot.empty) {
     const response = h.response({
       status: "fail",
       message: "Email sudah digunakan",
@@ -25,8 +27,8 @@ const registerHandler = async (request, h) => {
   }
 
   // Check if the username already exists
-  const isUsernameExist = listUser.some((user) => user.username === username);
-  if (isUsernameExist) {
+  const usernameSnapshot = await db.collection('user').where('username', '==', username).get();
+  if (!usernameSnapshot.empty) {
     const response = h.response({
       status: "fail",
       message: "Username sudah digunakan",
@@ -46,69 +48,99 @@ const registerHandler = async (request, h) => {
     id,
     type,
   };
-  if (type === "client") {
-    newUser.pesanan = [];
-  }
 
-  listUser.push(newUser);
+  // Create the user document
   await storeDataUser(id, newUser);
-  const isSuccess = listUser.filter((user) => user.id === id).length > 0;
 
-  if (isSuccess) {
-    const response = h.response({
-      status: "success",
-      message: "User berhasil ditambahkan",
-      data: {
-        userId: id,
-      },
-    });
-    response.code(201);
-    return response;
-  }
+  // Create a pesanan subcollection for the user
+  const pesananRef = userRef.collection('pesanan');
 
+  // Respond with success
   const response = h.response({
-    status: "fail",
-    message: "User gagal ditambahkan",
+    status: "success",
+    message: "User berhasil ditambahkan",
+    data: {
+      userId: id,
+    },
   });
-  response.code(500);
+  response.code(201);
   return response;
 };
 
-const getUserByIdHandler = (request, h) => {
+
+
+const getUserByIdHandler = async (request, h) => {
   const { userId } = request.params;
 
-  const user = listUser.find((user) => user.id === id);
-  if (user !== undefined) {
+  try {
+    const userRef = db.collection('user').doc(userId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      const response = h.response({
+        status: "fail",
+        message: "User tidak ditemukan",
+      });
+      response.code(404);
+      return response;
+    }
+
+    const user = userDoc.data();
+
     return {
       status: "success",
       data: {
         user,
       },
     };
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    const response = h.response({
+      status: "error",
+      message: "Terjadi kesalahan dalam mengambil data pengguna",
+    });
+    response.code(500);
+    return response;
   }
-  const response = h.response({
-    status: "fail",
-    message: "User tidak ditemukan",
-  });
-  response.code(404);
-  return response;
 };
 
-const updateAccountHandler = (request, h) => {
+const updateAccountHandler = async (request, h) => {
   const { userId } = request.params;
-
   const { username, password, email, nomorTelepon } = request.payload;
 
-  const index = listUser.findIndex((i) => i.id === userId);
+  try {
+    const userRef = db.collection('user').doc(userId);
+    const userDoc = await userRef.get();
 
-  if (index !== -1) {
-    listUser[index] = {
-      ...listUser[index],
-      username,
-      password,
-      email,
-      nomorTelepon,
-    };
+    if (!userDoc.exists) {
+      const response = h.response({
+        status: "fail",
+        message: "Gagal memperbarui akun. Id tidak ditemukan",
+      });
+      response.code(404);
+      return response;
+    }
+
+    // Construct update object with only provided fields
+    const updateData = {};
+
+    if (username !== undefined) {
+      updateData.username = username;
+    }
+
+    if (password !== undefined) {
+      updateData.password = password;
+    }
+
+    if (email !== undefined) {
+      updateData.email = email;
+    }
+
+    if (nomorTelepon !== undefined) {
+      updateData.nomorTelepon = nomorTelepon;
+    }
+
+    await userRef.update(updateData);
 
     const response = h.response({
       status: "success",
@@ -116,77 +148,113 @@ const updateAccountHandler = (request, h) => {
     });
     response.code(200);
     return response;
+  } catch (error) {
+    console.error("Error updating account:", error);
+    const response = h.response({
+      status: "error",
+      message: "Terjadi kesalahan dalam memperbarui akun",
+    });
+    response.code(500);
+    return response;
   }
-
-  const response = h.response({
-    status: "fail",
-    message: "Gagal memperbarui akun. Id tidak ditemukan",
-  });
-  response.code(404);
-  return response;
 };
 
-const deleteAccountHandler = (request, h) => {
+
+const deleteAccountHandler = async (request, h) => {
   const { userId } = request.params;
 
-  const index = listUser.findIndex((i) => i.id === userId);
+  try {
+    const userRef = db.collection('user').doc(userId);
+    const userDoc = await userRef.get();
 
-  if (index !== -1) {
-    listUser.splice(index, 1);
+    if (!userDoc.exists) {
+      const response = h.response({
+        status: "fail",
+        message: "Gagal menghapus akun. Id tidak ditemukan",
+      });
+      response.code(404);
+      return response;
+    }
+
+    // Delete all requests associated with the user
+    const requestsRef = userRef.collection('request');
+    const requestsSnapshot = await requestsRef.get();
+    const deleteRequestsPromises = requestsSnapshot.docs.map(doc => doc.ref.delete());
+    await Promise.all(deleteRequestsPromises);
+
+    // Delete the user account
+    await userRef.delete();
+
     const response = h.response({
       status: "success",
-      message: "Akun berhasil dihapus",
+      message: "Akun berhasil dihapus bersama dengan semua pesanannya",
     });
     response.code(200);
     return response;
+  } catch (error) {
+    console.error("Error deleting account:", error);
+    const response = h.response({
+      status: "error",
+      message: "Terjadi kesalahan dalam menghapus akun",
+    });
+    response.code(500);
+    return response;
   }
-
-  const response = h.response({
-    status: "fail",
-    message: "Akun gagal dihapus. Id tidak ditemukan",
-  });
-  response.code(404);
-  return response;
 };
+
 
 const loginHandler = async (request, h) => {
   const { username, password } = request.payload;
-  const user = listUser.find((user) => user.username === username);
-  if (!user) {
+
+  try {
+    const userQuerySnapshot = await db.collection('user').where('username', '==', username).limit(1).get();
+
+    if (userQuerySnapshot.empty) {
+      const response = h.response({
+        status: "fail",
+        message: "Username atau password salah",
+      });
+      response.code(401);
+      return response;
+    }
+
+    const userData = userQuerySnapshot.docs[0].data();
+    const isPasswordValid = await bcrypt.compare(password, userData.password);
+
+    if (!isPasswordValid) {
+      const response = h.response({
+        status: "fail",
+        message: "Username atau password salah",
+      });
+      response.code(401);
+      return response;
+    }
+
+    const token = jwt.sign(
+      { userId: userData.id, username: userData.username, type: userData.type },
+      JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    return {
+      status: "success",
+      message: "Login berhasil",
+      data: {
+        token,
+      },
+    };
+  } catch (error) {
+    console.error("Error logging in:", error);
     const response = h.response({
-      status: "fail",
-      message: "Username atau password salah",
+      status: "error",
+      message: "Terjadi kesalahan dalam proses login",
     });
-    response.code(401);
+    response.code(500);
     return response;
   }
-
-  const isPasswordValid = await bcrypt.compare(password, user.password);
-  if (!isPasswordValid) {
-    const response = h.response({
-      status: "fail",
-      message: "Username atau password salah",
-    });
-    response.code(401);
-    return response;
-  }
-
-  const token = jwt.sign(
-    { userId: user.id, username: user.username, type: user.type },
-    JWT_SECRET,
-    { expiresIn: "1h" }
-  );
-
-  return {
-    status: "success",
-    message: "Login berhasil",
-    data: {
-      token,
-    },
-  };
 };
 
-const verifyToken = (request, h) => {
+const verifyToken = async (request, h) => {
   const authHeader = request.headers.authorization;
 
   if (!authHeader) {
@@ -201,6 +269,9 @@ const verifyToken = (request, h) => {
   const token = authHeader.split(" ")[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+
+    // You may want to verify the token against the user's data in Firestore here
+
     request.user = decoded;
     return h.continue;
   } catch (err) {
@@ -213,31 +284,44 @@ const verifyToken = (request, h) => {
   }
 };
 
+
 const tambahPesananHandler = async (request, h) => {
   const { alamat } = request.payload;
   const id = nanoid(16);
   const createdAt = new Date().toISOString();
   const newPesanan = { userId: request.user.userId, alamat, id, createdAt };
 
-  const isClient = request.user.type === 'client'; // Check if user is admin
+  try {
+    console.log("User ID:", request.user.userId);
+    // Check if the user account exists
+    const userRef = db.collection('user').doc(request.user.userId);
+    const userDoc = await userRef.get();
 
-  if (!isClient) {
-    const response = h.response({
-      status: "fail",
-      message: "Hanya client yang dapat membuat pesanan ",
-    });
-    response.code(403);
-    return response;
-  }
-  const user = listUser.find(user => user.id === request.user.userId);
-  listPesanan.push(newPesanan);
-  user.pesanan.push(newPesanan);
-  await storeRequest(id, newPesanan);
+    if (!userDoc.exists) {
+      console.log("User document not found.");
+      const response = h.response({
+        status: "fail",
+        message: "User tidak ditemukan",
+      });
+      response.code(404);
+      return response;
+    }
 
-  const isSuccess =
-    listPesanan.filter((pesanan) => pesanan.id === id).length > 0;
+    const isClient = userDoc.data().type === 'client';
 
-  if (isSuccess) {
+    if (!isClient) {
+      const response = h.response({
+        status: "fail",
+        message: "Hanya client yang dapat membuat pesanan",
+      });
+      response.code(403);
+      return response;
+    }
+
+    // Add the new order to Firestore
+    const pesananRef = userRef.collection('request').doc(id);
+    await pesananRef.set(newPesanan);
+
     const response = h.response({
       status: "success",
       message: "Pesanan berhasil ditambahkan",
@@ -247,127 +331,173 @@ const tambahPesananHandler = async (request, h) => {
     });
     response.code(201);
     return response;
+  } catch (error) {
+    console.error("Error adding new order:", error);
+    const response = h.response({
+      status: "fail",
+      message: "Gagal menambahkan pesanan",
+    });
+    response.code(500);
+    return response;
   }
-
-  const response = h.response({
-    status: "fail",
-    message: "Pesanan gagal ditambahkan",
-  });
-  response.code(500);
-  return response;
 };
 
-const getPesananByIdHandler = (request, h) => {
+
+const getPesananByIdHandler = async (request, h) => {
   const { id } = request.params;
 
-  const pesanan = listPesanan.find((pesanan) => pesanan.id === id);
-  if (pesanan !== undefined) {
-    return {
+  try {
+    const userRef = db.collection('user').doc(request.user.userId);
+    const pesananRef = userRef.collection('request').doc(id);
+    const pesananDoc = await pesananRef.get();
+
+    if (!pesananDoc.exists) {
+      const response = h.response({
+        status: "fail",
+        message: "Pesanan tidak ditemukan",
+      });
+      response.code(404);
+      return response;
+    }
+
+    const pesananData = pesananDoc.data();
+
+    const response = h.response({
       status: "success",
       data: {
-        pesanan,
+        pesanan: pesananData,
       },
-    };
+    });
+    return response;
+  } catch (error) {
+    console.error("Error retrieving pesanan:", error);
+    const response = h.response({
+      status: "error",
+      message: "Terjadi kesalahan dalam mengambil pesanan",
+    });
+    response.code(500);
+    return response;
   }
-  const response = h.response({
-    status: "fail",
-    message: "Pesanan tidak ditemukan",
-  });
-  response.code(404);
-  return response;
 };
 
-const editPesananByIdHandler = (request, h) => {
+
+const editPesananByIdHandler = async (request, h) => {
   const { id } = request.params;
   const { berat, harga, alamat } = request.payload;
   const updatedAt = new Date().toISOString();
   const userRole = request.user.type; // Get the user's role
 
-  if (userRole === 'client') {
-    // If the user is a client, they can only update alamat
-    if (alamat !== undefined) {
-      const index = listPesanan.findIndex((i) => i.id === id);
-      if (index !== -1) {
-        listPesanan[index] = {
-          ...listPesanan[index],
-          alamat,
-          updatedAt,
-        };
+  try {
+    // Check if the user is a client
+    if (userRole === 'client') {
+      const clientRef = db.collection('user').doc(request.user.userId);
+      const requestRef = clientRef.collection('request').doc(id);
+      const requestDoc = await requestRef.get();
+
+      // Check if the request exists
+      if (!requestDoc.exists) {
         const response = h.response({
-          status: "success",
-          message: "Alamat pesanan berhasil diperbarui",
+          status: "fail",
+          message: "Pesanan tidak ditemukan atau Anda tidak memiliki izin untuk mengeditnya",
         });
-        response.code(200);
+        response.code(404);
         return response;
       }
-    } else {
-      // If client tries to update berat or harga
+
+      // Update the alamat field of the request document
+      await requestRef.update({ alamat, updatedAt });
+
+      const response = h.response({
+        status: "success",
+        message: "Alamat pesanan berhasil diupdate",
+      });
+      response.code(200);
+      return response;
+    } 
+    // Check if the user is a mitra
+    else if (userRole === 'mitra') {
+      // Query all users
+      const usersQuerySnapshot = await db.collection('user').get();
+
+      // Loop through each user to find the request
+      for (const userDoc of usersQuerySnapshot.docs) {
+        const userRef = userDoc.ref;
+        const requestQuerySnapshot = await userRef.collection('request').where('id', '==', id).get();
+
+        if (!requestQuerySnapshot.empty) {
+          // There should be only one request document associated with the user
+          const requestDoc = requestQuerySnapshot.docs[0];
+          
+          // Update the fields of the request document
+          const updateData = {
+            updatedAt,
+            idMitra: request.user.userId // Associate the request with the mitra
+          };
+          if (berat !== undefined) {
+            updateData.berat = berat;
+          }
+          if (harga !== undefined) {
+            updateData.harga = harga;
+          }
+          await requestDoc.ref.update(updateData);
+
+          const response = h.response({
+            status: "success",
+            message: "Berat dan harga pesanan berhasil diupdate",
+          });
+          response.code(200);
+          return response;
+        }
+      }
+
+      // If no request is found
       const response = h.response({
         status: "fail",
-        message: "Hanya mitra yang dapat menginputkan berat dan harga",
+        message: "Pesanan tidak ditemukan atau Anda tidak memiliki izin untuk mengeditnya",
+      });
+      response.code(404);
+      return response;
+    } else {
+      // If user's role is neither client nor mitra
+      const response = h.response({
+        status: "fail",
+        message: "User tidak diizinkan untuk melakukan aksi ini",
       });
       response.code(403);
       return response;
     }
-  } else if (userRole === 'mitra') {
-    // If the user is a mitra, they can only update berat and harga
-    if (berat !== undefined || harga !== undefined) {
-      const index = listPesanan.findIndex((i) => i.id === id);
-      if (index !== -1) {
-        listPesanan[index] = {
-          ...listPesanan[index],
-          berat,
-          harga,
-          updatedAt,
-        };
-        const response = h.response({
-          status: "success",
-          message: "Berat dan harga berhasil ditambahkan",
-        });
-        response.code(200);
-        return response;
-      }
-    } else {
-      // If mitra tries to update alamat
-      const response = h.response({
-        status: "fail",
-        message: "Hanya client yang dapat memperbarui alamat",
-      });
-      response.code(403);
-      return response;
-    }
-  } else {
-    // If user's role is neither client nor mitra
+  } catch (error) {
+    console.error("Error editing pesanan:", error);
     const response = h.response({
-      status: "fail",
-      message: "User tidak diizinkan untuk melakukan aksi ini",
+      status: "error",
+      message: "Terjadi kesalahan dalam mengedit pesanan",
     });
-    response.code(403);
+    response.code(500);
     return response;
   }
 };
 
 
 
-const deletePesananByIdHandler = (request, h) => {
+
+const deletePesananByIdHandler = async (request, h) => {
   const { id } = request.params;
 
-  const index = listPesanan.findIndex((i) => i.id === id);
-
-  if (index !== -1) {
-    const [deletedPesanan] = listPesanan.splice(index, 1);
-
-    const userIndex = listUser.findIndex(
-      (user) => user.id === deletedPesanan.userId
-    );
-    if (userIndex !== -1) {
-      const userPesananIndex = listUser[userIndex].pesanan.findIndex(
-        (pesanan) => pesanan.id === id
-      );
-      if (userPesananIndex !== -1) {
-        listUser[userIndex].pesanan.splice(userPesananIndex, 1);
-      }
+  try {
+    const userRef = db.collection('user').doc(request.user.userId);
+    const pesananRef = userRef.collection('request').doc(id);
+    const pesananDoc = await pesananRef.get();
+    if (!pesananDoc.exists) {
+      const response = h.response({
+        status: "fail",
+        message: "Pesanan tidak ditemukan",
+      });
+      response.code(404);
+      return response;
     }
+
+    // Delete the pesanan
+    await pesananRef.delete();
 
     const response = h.response({
       status: "success",
@@ -375,38 +505,42 @@ const deletePesananByIdHandler = (request, h) => {
     });
     response.code(200);
     return response;
+  } catch (error) {
+    console.error("Error deleting pesanan:", error);
+    const response = h.response({
+      status: "error",
+      message: "Terjadi kesalahan dalam membatalkan pesanan",
+    });
+    response.code(500);
+    return response;
   }
-
-  const response = h.response({
-    status: "fail",
-    message: "Pesanan gagal dibatalkan. Id tidak ditemukan",
-  });
-  response.code(404);
-  return response;
 };
 
 
-const tambahArtikelHandler = (request, h) => {
+
+const tambahArtikelHandler = async (request, h) => {
   const { judul, isi, penulis } = request.payload;
   const id = nanoid(16);
   const createdAt = new Date().toISOString();
   const updatedAt = createdAt;
-  console.log('User type:', request.user);
-  const isAdmin = request.user.type === 'admin'; // Check if user is admin
 
-  if (!isAdmin) {
-    const response = h.response({
-      status: "fail",
-      message: "Hanya Admin yang dapat membuat artikel",
-    });
-    response.code(403);
-    return response;
-  }
-  const newArtikel = { judul, isi, penulis, id, createdAt, updatedAt };
-  listArtikel.push(newArtikel);
-  const isSuccess = listArtikel.filter((i) => i.id === id).length > 0;
+  try {
+    // Check if the user is an admin
+    const isAdmin = request.user.type === 'admin';
 
-  if (isSuccess) {
+    if (!isAdmin) {
+      const response = h.response({
+        status: "fail",
+        message: "Hanya Admin yang dapat membuat artikel",
+      });
+      response.code(403);
+      return response;
+    }
+
+    // Create a new artikel document in Firestore
+    const artikelRef = db.collection('artikel').doc(id);
+    await artikelRef.set({ judul, isi, penulis, id, createdAt, updatedAt });
+
     const response = h.response({
       status: "success",
       message: "Artikel berhasil ditambahkan",
@@ -416,38 +550,54 @@ const tambahArtikelHandler = (request, h) => {
     });
     response.code(201);
     return response;
+  } catch (error) {
+    console.error("Error adding artikel:", error);
+    const response = h.response({
+      status: "fail",
+      message: "Gagal menambahkan artikel",
+    });
+    response.code(500);
+    return response;
   }
-  const response = h.response({
-    status: "fail",
-    message: "Artikel gagal ditambahkan",
-  });
-  response.code(500);
-  return response;
 };
 
-const getArtikelByIdHandler = (request, h) => {
+
+const getArtikelByIdHandler = async (request, h) => {
   const { artikelId } = request.params;
 
-  const artikel = listArtikel.find((i) => i.id === artikelId);
-  if (artikel !== undefined) {
-    return {
-      status: "success",
-      data: {
-        artikel,
-      },
-    };
+  try {
+    // Get the artikel document from Firestore
+    const artikelDoc = await db.collection('artikel').doc(artikelId).get();
+
+    if (artikelDoc.exists) {
+      const artikel = artikelDoc.data();
+      return {
+        status: "success",
+        data: {
+          artikel,
+        },
+      };
+    } else {
+      const response = h.response({
+        status: "fail",
+        message: "Artikel tidak ditemukan",
+      });
+      response.code(404);
+      return response;
+    }
+  } catch (error) {
+    console.error("Error fetching artikel:", error);
+    const response = h.response({
+      status: "error",
+      message: "Terjadi kesalahan dalam mengambil artikel",
+    });
+    response.code(500);
+    return response;
   }
-  const response = h.response({
-    status: "fail",
-    message: "Artikel tidak ditemukan",
-  });
-  response.code(404);
-  return response;
 };
 
-const editArtikelByIdHandler = (request, h) => {
+const editArtikelByIdHandler = async (request, h) => {
   const { artikelId } = request.params;
-
   const { judul, isi, penulis } = request.payload;
   const updatedAt = new Date().toISOString();
   const isAdmin = request.user.type === 'admin'; // Check if user is admin
@@ -460,16 +610,25 @@ const editArtikelByIdHandler = (request, h) => {
     response.code(403);
     return response;
   }
-  const index = listArtikel.findIndex((i) => i.id === artikelId);
 
-  if (index !== -1) {
-    listArtikel[index] = {
-      ...listArtikel[index],
-      judul,
-      isi,
-      penulis,
-      updatedAt,
-    };
+  try {
+    // Update the artikel document in Firestore
+    const artikelRef = db.collection('artikel').doc(artikelId);
+
+    // Construct the update object based on the provided fields
+    const updateData = {};
+    if (judul !== undefined) {
+      updateData.judul = judul;
+    }
+    if (isi !== undefined) {
+      updateData.isi = isi;
+    }
+    if (penulis !== undefined) {
+      updateData.penulis = penulis;
+    }
+    updateData.updatedAt = updatedAt;
+
+    await artikelRef.update(updateData);
 
     const response = h.response({
       status: "success",
@@ -477,17 +636,19 @@ const editArtikelByIdHandler = (request, h) => {
     });
     response.code(200);
     return response;
+  } catch (error) {
+    console.error("Error updating artikel:", error);
+    const response = h.response({
+      status: "error",
+      message: "Terjadi kesalahan dalam memperbarui artikel",
+    });
+    response.code(500);
+    return response;
   }
-
-  const response = h.response({
-    status: "fail",
-    message: "Gagal memperbarui artikel. Id tidak ditemukan",
-  });
-  response.code(404);
-  return response;
 };
 
-const deleteArtikelByIdHandler = (request, h) => {
+
+const deleteArtikelByIdHandler = async (request, h) => {
   const { artikelId } = request.params;
   const isAdmin = request.user.type === 'admin'; // Check if user is admin
 
@@ -499,82 +660,140 @@ const deleteArtikelByIdHandler = (request, h) => {
     response.code(403);
     return response;
   }
-  const index = listArtikel.findIndex((i) => i.id === artikelId);
 
-  if (index !== -1) {
-    listArtikel.splice(index, 1);
+  try {
+    // Delete the artikel document from Firestore
+    const artikelRef = db.collection('artikel').doc(artikelId);
+    await artikelRef.delete();
+
     const response = h.response({
       status: "success",
       message: "Artikel berhasil dihapus",
     });
     response.code(200);
     return response;
+  } catch (error) {
+    console.error("Error deleting artikel:", error);
+    const response = h.response({
+      status: "error",
+      message: "Terjadi kesalahan dalam menghapus artikel",
+    });
+    response.code(500);
+    return response;
   }
-
-  const response = h.response({
-    status: "fail",
-    message: "Artikel gagal dihapus. Id tidak ditemukan",
-  });
-  response.code(404);
-  return response;
 };
 
-const getSemuaPesananByUserHandler = (request, h) => {
-  const { userId } = request.user;
 
-  const userPesanan = listPesanan.filter(
-    (pesanan) => pesanan.userId === userId
-  );
+const getSemuaPesananByUserHandler = async (request, h) => {
 
-  if (userPesanan.length > 0) {
+  try {
+    console.log("User ID:", request.user.userId);
+    // Query Firestore to get all pesanan associated with the user
+    const pesananQuerySnapshot = await db.collection('user').doc(request.user.userId).collection('request').get();
+    const userPesanan = pesananQuerySnapshot.docs.map(doc => doc.data());
+
+    if (userPesanan.length > 0) {
+      return {
+        status: "success",
+        data: {
+          pesanan: userPesanan,
+        },
+      };
+    } else {
+      const response = h.response({
+        status: "fail",
+        message: "User tidak memiliki pesanan",
+      });
+      response.code(404);
+      return response;
+    }
+  } catch (error) {
+    console.error("Error fetching pesanan:", error);
+    const response = h.response({
+      status: "error",
+      message: "Terjadi kesalahan dalam mengambil pesanan",
+    });
+    response.code(500);
+    return response;
+  }
+};
+
+const getSemuaUserHandler = async () => {
+  try {
+    // Query Firestore to get all users
+    const userQuerySnapshot = await db.collection('user').get();
+    const listUser = userQuerySnapshot.docs.map(doc => doc.data());
+
     return {
       status: "success",
       data: {
-        pesanan: userPesanan,
+        listUser,
       },
     };
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    return {
+      status: "error",
+      message: "Terjadi kesalahan dalam mengambil daftar pengguna",
+    };
   }
-  const response = h.response({
-    status: "fail",
-    message: "User tidak memiliki pesanan",
-  });
-  response.code(404);
-  return response;
 };
 
-const getSemuaUserHandler = () => ({
-  status: "success",
-  data: {
-    listUser,
-  },
-});
-const getSemuaArtikelHandler = () => ({
-  status: "success",
-  data: {
-    listArtikel,
-  },
-});
-const getUserInfoHandler = (request, h) => {
-  const { userId } = request.user;
-  const userInfo = listUser.find((user) => user.id === userId);
-  if (userInfo) {
+const getSemuaArtikelHandler = async () => {
+  try {
+    // Query Firestore to get all articles
+    const artikelQuerySnapshot = await db.collection('artikel').get();
+    const listArtikel = artikelQuerySnapshot.docs.map(doc => doc.data());
+
     return {
       status: "success",
       data: {
-        userId,
-        userInfo,
+        listArtikel,
       },
     };
+  } catch (error) {
+    console.error("Error fetching articles:", error);
+    return {
+      status: "error",
+      message: "Terjadi kesalahan dalam mengambil daftar artikel",
+    };
   }
-  const response = h.response({
-    status: "fail",
-    message: "User information not found",
-  });
-  response.code(404);
-  return response;
 };
 
+const getUserInfoHandler = async (request, h) => {
 
+  try {
+    // Query Firestore to get user information
+    
+    const userDoc = await db.collection('user').doc(request.user.userId).get();
+    const userInfo = userDoc.data();
+
+    if (userInfo) {
+      return {
+        status: "success",
+        data: {
+          userId: request.user.userId,
+          userInfo,
+        },
+      };
+    } else {
+      const response = h.response({
+        status: "fail",
+        message: "User information not found",
+      });
+      response.code(404);
+      return response;
+    }
+  } catch (error) {
+    console.error("Error fetching user information:", error);
+    const response = h.response({
+      status: "error",
+      message: "Terjadi kesalahan dalam mengambil informasi pengguna",
+    });
+    response.code(500);
+    return response;
+  }
+};
 
 
 module.exports = {

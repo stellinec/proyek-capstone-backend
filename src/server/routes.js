@@ -28,9 +28,6 @@ const {
       method: 'GET',
       path: '/user/{userId}',
       handler: getUserByIdHandler,
-      options: {
-        pre: [verifyToken],
-      },
     },
     {
       method: 'PUT',
@@ -65,9 +62,7 @@ const {
       method: 'GET',
       path: '/pesanan/{id}',
       handler: getPesananByIdHandler,
-      options: {
-        pre: [verifyToken],
-      },
+
     },
     {
       method: 'PUT',
@@ -97,9 +92,6 @@ const {
     method: 'GET',
     path: '/artikel/{artikelId}',
     handler: getArtikelByIdHandler,
-    options: {
-      pre: [verifyToken],
-    },
   },
   {
     method: 'PUT',

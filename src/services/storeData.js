@@ -11,8 +11,14 @@ async function storeRequest(id, data) {
     const requestCollection = db.collection('request');
     return requestCollection.doc(id).set(data);
 }
+async function storeArtikel(id, data) {   
+    const requestCollection = db.collection('artikel');
+    return requestCollection.doc(id).set(data);
+}
 
 module.exports = {
+    db,
     storeDataUser,
-    storeRequest
+    storeRequest,
+    storeArtikel,
 };
