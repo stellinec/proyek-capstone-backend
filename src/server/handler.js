@@ -1,9 +1,10 @@
 const { nanoid } = require("nanoid");
-const listPesanan = require("./listPesanan");
-const listUser = require("./listUser");
-const listArtikel = require("./listArtikel");
+const listPesanan = require("../services/listPesanan");
+const listUser = require("../services/listUser");
+const listArtikel = require("../services/listArtikel");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const { storeDataUser, storeRequest } = require('../services/storeData');
 
 // Secret key for JWT
 const JWT_SECRET = "capstone"; // Replace with a strong secret key
@@ -50,6 +51,7 @@ const registerHandler = async (request, h) => {
   }
 
   listUser.push(newUser);
+  await storeDataUser(id, newUser);
   const isSuccess = listUser.filter((user) => user.id === id).length > 0;
 
   if (isSuccess) {
@@ -149,7 +151,6 @@ const deleteAccountHandler = (request, h) => {
 
 const loginHandler = async (request, h) => {
   const { username, password } = request.payload;
-
   const user = listUser.find((user) => user.username === username);
   if (!user) {
     const response = h.response({
@@ -212,7 +213,7 @@ const verifyToken = (request, h) => {
   }
 };
 
-const tambahPesananHandler = (request, h) => {
+const tambahPesananHandler = async (request, h) => {
   const { alamat } = request.payload;
   const id = nanoid(16);
   const createdAt = new Date().toISOString();
@@ -231,6 +232,7 @@ const tambahPesananHandler = (request, h) => {
   const user = listUser.find(user => user.id === request.user.userId);
   listPesanan.push(newPesanan);
   user.pesanan.push(newPesanan);
+  await storeRequest(id, newPesanan);
 
   const isSuccess =
     listPesanan.filter((pesanan) => pesanan.id === id).length > 0;
