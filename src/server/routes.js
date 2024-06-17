@@ -82,7 +82,7 @@ const {
    },
    {
     method: 'POST',
-    path: '/artikel',
+    path: '/article',
     handler: tambahArtikelHandler,
     options: {
       pre: [verifyToken],
@@ -90,12 +90,12 @@ const {
   },
   {
     method: 'GET',
-    path: '/artikel/{artikelId}',
+    path: '/article/{artikelId}',
     handler: getArtikelByIdHandler,
   },
   {
     method: 'PUT',
-    path: '/artikel/{artikelId}',
+    path: '/article/{artikelId}',
     handler: editArtikelByIdHandler,
     options: {
       pre: [verifyToken],
@@ -103,7 +103,7 @@ const {
   },
   {
     method: 'DELETE',
-    path: '/artikel/{artikelId}',
+    path: '/article/{artikelId}',
     handler: deleteArtikelByIdHandler,
     options: {
       pre: [verifyToken],
@@ -119,7 +119,7 @@ const {
     },
     {
       method: 'GET',
-      path: '/artikels',
+      path: '/articles',
       handler: getSemuaArtikelHandler,
       
     },

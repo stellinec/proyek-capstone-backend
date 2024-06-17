@@ -317,8 +317,7 @@ const tambahPesananHandler = async (request, h) => {
     }
 
     // Add the new order to Firestore
-    const pesananRef = userRef.collection('request').doc(id);
-    await pesananRef.set(newPesanan);
+    await storeRequest(id, newPesanan);
 
     const response = h.response({
       status: "success",
@@ -345,8 +344,7 @@ const getPesananByIdHandler = async (request, h) => {
   const { id } = request.params;
 
   try {
-    const userRef = db.collection('user').doc(request.user.userId);
-    const pesananRef = userRef.collection('request').doc(id);
+    const pesananRef = db.collection('request').doc(id);
     const pesananDoc = await pesananRef.get();
 
     if (!pesananDoc.exists) {
@@ -388,12 +386,11 @@ const editPesananByIdHandler = async (request, h) => {
   try {
     // Check if the user is a client
     if (userRole === 'client') {
-      const clientRef = db.collection('user').doc(request.user.userId);
-      const requestRef = clientRef.collection('request').doc(id);
+      const requestRef = db.collection('request').where('userId', '==', request.user.userId).where('id', '==', id);
       const requestDoc = await requestRef.get();
 
       // Check if the request exists
-      if (!requestDoc.exists) {
+      if (requestDoc.empty) {
         const response = h.response({
           status: "fail",
           message: "Pesanan tidak ditemukan atau Anda tidak memiliki izin untuk mengeditnya",
@@ -403,8 +400,10 @@ const editPesananByIdHandler = async (request, h) => {
       }
 
       // Update the alamat field of the request document
-      await requestRef.update({ alamat, updatedAt });
-
+      requestDoc.forEach(async (doc) => {
+        await doc.ref.update({ alamat, updatedAt });
+      });
+  
       const response = h.response({
         status: "success",
         message: "Alamat pesanan berhasil diupdate",
@@ -414,13 +413,8 @@ const editPesananByIdHandler = async (request, h) => {
     } 
     // Check if the user is a mitra
     else if (userRole === 'mitra') {
-      // Query all users
-      const usersQuerySnapshot = await db.collection('user').get();
-
-      // Loop through each user to find the request
-      for (const userDoc of usersQuerySnapshot.docs) {
-        const userRef = userDoc.ref;
-        const requestQuerySnapshot = await userRef.collection('request').where('id', '==', id).get();
+      const requestRef = db.collection('request').where('id', '==', id);
+      const requestQuerySnapshot = await requestRef.get();
 
         if (!requestQuerySnapshot.empty) {
           // There should be only one request document associated with the user
@@ -446,7 +440,6 @@ const editPesananByIdHandler = async (request, h) => {
           response.code(200);
           return response;
         }
-      }
 
       // If no request is found
       const response = h.response({
@@ -475,17 +468,14 @@ const editPesananByIdHandler = async (request, h) => {
   }
 };
 
-
-
-
 const deletePesananByIdHandler = async (request, h) => {
   const { id } = request.params;
 
   try {
-    const userRef = db.collection('user').doc(request.user.userId);
-    const pesananRef = userRef.collection('request').doc(id);
-    const pesananDoc = await pesananRef.get();
-    if (!pesananDoc.exists) {
+    const requestRef = db.collection('request').where('userId', '==', request.user.userId).where('id', '==', id);
+    const requestDoc = await requestRef.get();
+
+    if (requestDoc.empty) {
       const response = h.response({
         status: "fail",
         message: "Pesanan tidak ditemukan",
@@ -495,7 +485,9 @@ const deletePesananByIdHandler = async (request, h) => {
     }
 
     // Delete the pesanan
-    await pesananRef.delete();
+    requestDoc.forEach(async (doc) => {
+      await doc.ref.delete();
+    });
 
     const response = h.response({
       status: "success",
