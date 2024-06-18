@@ -252,6 +252,41 @@ const loginHandler = async (request, h) => {
   }
 };
 
+const logoutHandler = async (request, h) => {
+  const authHeader = request.headers.authorization;
+  if (!authHeader) {
+    const response = h.response({
+      status: "fail",
+      message: "Authorization header tidak ada",
+    });
+    response.code(401);
+    return response;
+  }
+
+  const token = authHeader.split(" ")[1];
+  try {
+    // Add the token to the blacklist
+    await db.collection('blacklistedTokens').doc(token).set({ invalidatedAt: new Date().toISOString() });
+
+    const response = h.response({
+      status: "success",
+      message: "Logout berhasil",
+    });
+    response.code(200);
+    return response;
+  } catch (error) {
+    console.error("Error blacklisting token:", error);
+    const response = h.response({
+      status: "error",
+      message: "Terjadi kesalahan saat logout",
+    });
+    response.code(500);
+    return response;
+  }
+};
+
+
+
 const verifyToken = async (request, h) => {
   const authHeader = request.headers.authorization;
 
@@ -266,6 +301,18 @@ const verifyToken = async (request, h) => {
 
   const token = authHeader.split(" ")[1];
   try {
+    // Check if the token is blacklisted
+    const blacklistedRef = db.collection('blacklistedTokens').doc(token);
+    const blacklistedDoc = await blacklistedRef.get();
+    if (blacklistedDoc.exists) {
+      const response = h.response({
+        status: "fail",
+        message: "Token tidak valid",
+      });
+      response.code(401);
+      throw response;
+    }
+
     const decoded = jwt.verify(token, JWT_SECRET);
 
     // You may want to verify the token against the user's data in Firestore here
@@ -791,6 +838,7 @@ module.exports = {
   getUserByIdHandler,
   registerHandler,
   loginHandler,
+  logoutHandler,
   deleteAccountHandler,
   updateAccountHandler,
   tambahPesananHandler,

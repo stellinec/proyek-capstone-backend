@@ -15,7 +15,9 @@ const {
   getSemuaPesananByUserHandler,
   getSemuaArtikelHandler,
   getPesananByIdHandler,
-  verifyToken, getUserInfoHandler
+  verifyToken, getUserInfoHandler,
+  // postPredictHandler,
+  logoutHandler
   
   } = require('./handler');
   const routes = [
@@ -139,6 +141,26 @@ const {
         pre: [verifyToken],
       },
     },
+    {
+      method: 'GET',
+      path: '/logout',
+      handler: logoutHandler,
+      options: {
+        pre: [verifyToken],
+      },
+    },
+    // {
+    //   path: '/predict',
+    //   method: 'POST',
+    //   handler: postPredictHandler,
+    //   options: {
+    //     payload: {
+    //       maxBytes: 1000000, 
+    //       multipart: true, 
+    //       allow: 'multipart/form-data',
+    //     },
+    //   },
+    // },
     
   ];
   
