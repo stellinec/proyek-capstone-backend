@@ -801,23 +801,25 @@ const getSemuaArtikelHandler = async () => {
 
 const getSemuaPesananHandler = async () => {
   try {
-    // Query Firestore to get all pesanans
-    const artikelQuerySnapshot = await db.collection('pesanan').get();
-    const listPesanan = artikelQuerySnapshot.docs.map(doc => doc.data());
-    console.log(listPesanan);
+    // Query Firestore to get all users
+    const requestQuerySnapshot = await db.collection('request').get();
+    const listRequest = requestQuerySnapshot.docs
+        .map(doc => doc.data())
+        .filter(request => !request.hasOwnProperty('idMitra'));
+
     return {
       status: "success",
       data: {
-        listPesanan,
+        listRequest,
       },
     };
   } catch (error) {
-    console.error("Error fetching pesanans:", error);
+    console.error("Error fetching request:", error);
     return {
       status: "error",
       message: "Terjadi kesalahan dalam mengambil daftar pesanan",
-    };
-  }
+    };
+  }
 };
 
 const getUserInfoHandler = async (request, h) => {

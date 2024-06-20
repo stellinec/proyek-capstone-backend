@@ -128,7 +128,7 @@ const {
     },
     {
       method: 'GET',
-      path: '/pesanan',
+      path: '/daftar/pesanan',
       handler: getSemuaPesananHandler,
       
     },
