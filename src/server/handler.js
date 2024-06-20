@@ -330,6 +330,8 @@ const verifyToken = async (request, h) => {
 };
 
 
+
+
 const tambahPesananHandler = async (request, h) => {
   const { alamat } = request.payload;
   const id = nanoid(16);
@@ -797,6 +799,27 @@ const getSemuaArtikelHandler = async () => {
   }
 };
 
+const getSemuaPesananHandler = async () => {
+  try {
+    // Query Firestore to get all pesanans
+    const artikelQuerySnapshot = await db.collection('pesanan').get();
+    const listPesanan = artikelQuerySnapshot.docs.map(doc => doc.data());
+    console.log(listPesanan);
+    return {
+      status: "success",
+      data: {
+        listPesanan,
+      },
+    };
+  } catch (error) {
+    console.error("Error fetching pesanans:", error);
+    return {
+      status: "error",
+      message: "Terjadi kesalahan dalam mengambil daftar pesanan",
+    };
+  }
+};
+
 const getUserInfoHandler = async (request, h) => {
 
   try {
@@ -850,6 +873,7 @@ module.exports = {
   deleteArtikelByIdHandler,
   getSemuaPesananByUserHandler,
   getSemuaArtikelHandler,
+  getSemuaPesananHandler,
   getPesananByIdHandler,
   verifyToken,getUserInfoHandler
 };

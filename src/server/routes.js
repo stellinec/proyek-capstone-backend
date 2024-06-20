@@ -14,6 +14,7 @@ const {
   deleteArtikelByIdHandler,
   getSemuaPesananByUserHandler,
   getSemuaArtikelHandler,
+  getSemuaPesananHandler,
   getPesananByIdHandler,
   verifyToken, getUserInfoHandler,
   // postPredictHandler,
@@ -123,6 +124,12 @@ const {
       method: 'GET',
       path: '/articles',
       handler: getSemuaArtikelHandler,
+      
+    },
+    {
+      method: 'GET',
+      path: '/pesanan',
+      handler: getSemuaPesananHandler,
       
     },
     {
