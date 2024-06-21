@@ -558,7 +558,7 @@ const deletePesananByIdHandler = async (request, h) => {
 
 
 const tambahArtikelHandler = async (request, h) => {
-  const { judul, isi, penulis } = request.payload;
+  const { judul, isi, penulis, image } = request.payload;
   const id = nanoid(16);
   const createdAt = new Date().toISOString();
   const updatedAt = createdAt;
@@ -578,7 +578,7 @@ const tambahArtikelHandler = async (request, h) => {
 
     // Create a new artikel document in Firestore
     const artikelRef = db.collection('artikel').doc(id);
-    await artikelRef.set({ judul, isi, penulis, id, createdAt, updatedAt });
+    await artikelRef.set({ judul, isi, penulis,image, id, createdAt, updatedAt });
 
     const response = h.response({
       status: "success",
@@ -637,7 +637,7 @@ const getArtikelByIdHandler = async (request, h) => {
 
 const editArtikelByIdHandler = async (request, h) => {
   const { artikelId } = request.params;
-  const { judul, isi, penulis } = request.payload;
+  const { judul, isi, penulis, image } = request.payload;
   const updatedAt = new Date().toISOString();
   const isAdmin = request.user.type === 'admin'; // Check if user is admin
 
@@ -664,6 +664,9 @@ const editArtikelByIdHandler = async (request, h) => {
     }
     if (penulis !== undefined) {
       updateData.penulis = penulis;
+    }
+    if (image !== undefined) {
+      updateData.image = image;
     }
     updateData.updatedAt = updatedAt;
 
